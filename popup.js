@@ -86,3 +86,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+
+
+
+
+
+
+
+/*document.addEventListener('DOMContentLoaded', () => {
+  const statusElement = document.getElementById('status');
+  const startButton = document.getElementById('start');
+  const stopButton = document.getElementById('stop');
+  const exitButton = document.getElementById('exit');
+
+  // Connect to the background script
+  const port = chrome.runtime.connect({ name: 'popup' });
+
+  // Handle messages from the background script
+  port.onMessage.addListener((msg) => {
+    if (msg.type === 'scanningStatus') {
+      updateStatus(msg.isScanning); // Update the popup UI based on scanning status
+    }
+  });
+
+  // Function to update the popup status and button states
+  function updateStatus(isScanning) {
+    if (isScanning) {
+      statusElement.textContent = 'Actively scanning...';
+      startButton.classList.add('hidden');
+      stopButton.classList.remove('hidden');
+    } else {
+      statusElement.textContent = 'Scanning is paused';
+      startButton.classList.remove('hidden');
+      stopButton.classList.add('hidden');
+    }
+  }
+
+  // Start scanning
+  startButton.addEventListener('click', () => {
+    port.postMessage({ action: 'startScanning' }); // Notify the background script to start scanning
+    statusElement.textContent = 'Resuming scanning...';
+  });
+
+  // Stop scanning
+  stopButton.addEventListener('click', () => {
+    port.postMessage({ action: 'stopScanning' }); // Notify the background script to stop scanning
+    statusElement.textContent = 'Pausing scanning and reverting page to normal...';
+  });
+
+  // Exit the extension
+  exitButton.addEventListener('click', () => {
+    port.postMessage({ action: 'exitExtension' }); // Notify the background script to exit
+    chrome.tabs.query({ active: true, currentWindow: true }, () => {
+      window.close(); // Close the popup window
+    });
+  });
+
+  // Request the initial scanning status on popup load
+  port.postMessage({ action: 'getStatus' });
+});*/
