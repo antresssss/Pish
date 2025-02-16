@@ -2,14 +2,15 @@
 
 //MAIN CODE 
 
+
+// background.js
 console.log("Background script is running!");
 
-let isScanning = true;
 let detectedUrls = new Set();
 let ports = new Set();
-const VIRUSTOTAL_API_KEY = 'fown virusTotal api key'; //Add your own virus total api key
+const VIRUSTOTAL_API_KEY = 'VirusTotal Api key yours'; // Add your own API key here
 const VIRUSTOTAL_API_URL = 'https://www.virustotal.com/api/v3/urls';
-const GROQ_API_KEY = "own groq key"; // Add your own Groq api key 
+const GROQ_API_KEY = "Your groq api key"; // Add your own API key here
 
 // Broadcast status to all connected popups
 function broadcastStatus() {
@@ -17,7 +18,6 @@ function broadcastStatus() {
         try {
             port.postMessage({
                 type: 'scanningStatus',
-                isScanning,
                 detectedUrls: Array.from(detectedUrls)
             });
         } catch (error) {
@@ -144,10 +144,15 @@ function calculateSimilarity(str1, str2) {
     return 1 - (matrix[len2][len1] / Math.max(len1, len2));
 }
 
+let urlCache = new Map();
+
 // Check URL with Groq LLM
-async function checkWithLLM(url) {
-    if (!isScanning) return false;
-    
+async function checkWithLLM(url) {    
+    if (urlCache.has(url)) {
+        console.log("Using cached result for:", url);
+        return urlCache.get(url); // Return cached result instead of calling API
+    }
+
     try {
         const urlFeatures = extractUrlFeatures(url);
         const response = await makeGroqRequest([
@@ -171,7 +176,10 @@ async function checkWithLLM(url) {
             }
         ]);
 
-        return response?.toLowerCase().includes("suspicious");
+        const result = response?.toLowerCase().includes("suspicious"); // ✅ Corrected!
+        urlCache.set(url, result); // ✅ Now this line executes properly
+        return result; 
+        
     } catch (error) {
         console.error('Groq API error:', error);
         return false;
@@ -180,8 +188,6 @@ async function checkWithLLM(url) {
 
 // Check URL with VirusTotal API with rate limiting
 async function checkWithVirusTotal(url) {
-    if (!isScanning) return false;
-    
     try {
         // Add delay for rate limiting
         await new Promise(resolve => setTimeout(resolve, 15000));
@@ -234,43 +240,18 @@ chrome.runtime.onConnect.addListener((port) => {
     if (port.name === 'popup') {
         ports.add(port);
         
-        port.onDisconnect.addListener(() => {
-        ports.delete(port);
-    });
         // Send initial status
         port.postMessage({
             type: 'scanningStatus',
-            isScanning,
             detectedUrls: Array.from(detectedUrls)
         });
 
         port.onMessage.addListener(async (msg) => {
-            switch (msg.action) {
-                case 'startScanning':
-                    isScanning = true;
-                    chrome.tabs.query({}, (tabs) => {
-                        tabs.forEach(tab => {
-                            chrome.tabs.sendMessage(tab.id, { action: 'startScanning' });
-                        });
-                    });
-                    break;
-
-                case 'stopScanning':
-                    isScanning = false;
-                    chrome.tabs.query({}, (tabs) => {
-                        tabs.forEach(tab => {
-                            chrome.tabs.sendMessage(tab.id, { action: 'stopScanning' });
-                        });
-                    });
-                    break;
-
-                case 'getStatus':
-                    port.postMessage({
-                        type: 'scanningStatus',
-                        isScanning,
-                        detectedUrls: Array.from(detectedUrls)
-                    });
-                    break;
+            if (msg.action === 'getStatus') {
+                port.postMessage({
+                    type: 'scanningStatus',
+                    detectedUrls: Array.from(detectedUrls)
+                });
             }
             broadcastStatus();
         });
@@ -284,31 +265,23 @@ chrome.runtime.onConnect.addListener((port) => {
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'checkUrls') {
-        if (isScanning) {
-            checkUrls(request.urls, sender.tab.id).then(() => {
-                broadcastStatus();
-                sendResponse({ success: true });
-            });
-        } else {
-            sendResponse({ success: false, reason: 'scanning_disabled' });
-        }
+        checkUrls(request.urls, sender.tab.id).then(() => {
+            broadcastStatus();
+            sendResponse({ success: true });
+        });
         return true;
     }
     
     if (request.action === 'openWarningPage') {
-        if (isScanning) {
-            chrome.tabs.create({
-                url: `warning.html?url=${encodeURIComponent(request.url)}`
-            });
-        }
+        chrome.tabs.create({
+            url: `warning.html?url=${encodeURIComponent(request.url)}`
+        });
         return true;
     }
 });
 
 // Process URLs and update UI
 async function checkUrls(urls, tabId) {
-    if (!isScanning) return;
-
     for (const url of urls) {
         // Skip if URL is already detected as suspicious
         if (detectedUrls.has(url)) continue;
@@ -342,8 +315,6 @@ async function checkUrls(urls, tabId) {
 
 // Highlight suspicious URL in content
 function highlightUrl(url, tabId) {
-    if (!isScanning) return;
-    
     chrome.tabs.sendMessage(tabId, {
         action: 'highlightPhishingUrl',
         url: url
@@ -361,6 +332,5 @@ function highlightUrl(url, tabId) {
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(() => {
     // Initialize extension state
-    isScanning = true;
     detectedUrls.clear();
 });
