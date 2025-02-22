@@ -1,0 +1,96 @@
+body {
+    width: 300px;
+    padding: 10px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .url-item {
+    margin: 5px 0;
+    padding: 8px;
+    border: 1px solid #ffcdd2;
+    border-radius: 3px;
+    background-color: #fff5f5;
+    word-break: break-all;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  
+  .url-item:not(:last-child) {
+    border-bottom: 1px solid #ffcdd2;
+  }
+  
+  button {
+    margin: 5px;
+    padding: 5px 10px;
+  }
+  
+  #normal-state {
+    text-align: center;
+  }
+  
+  #alert-container {
+    background-color: #ffe6e6;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  
+  #urls-list {
+    display: none;
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  #urls-list.visible {
+    display: block;
+  }
+  
+  #view-details-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 10px 0;
+  }
+  
+  #view-details-btn:hover {
+    background-color: #ff5555;
+  }
+  
+  .alert-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  
+  .alert-symbol {
+    font-size: 24px;
+  }
+  
+  .alert-emphasis {
+    color: #ff0000;
+    font-weight: bold;
+  }
+  
+  #alert-title {
+    margin: 0;
+    font-size: 18px;
+  }
+  
+  .extension-name {
+    font-size: 24px;
+    color: #333;
+    margin: 0 0 15px 0;
+    text-align: center;
+  }

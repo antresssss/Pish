@@ -1,10 +1,17 @@
 //Main CODE
 // popup.js
+
+
 let port = null;
+let lastDetectedUrls = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
-  const statusElement = document.getElementById('status');
-  const exitButton = document.getElementById('exit');
+  const normalState = document.getElementById('normal-state');
+  const alertContainer = document.getElementById('alert-container');
+  const alertTitle = document.getElementById('alert-title');
+  const urlsList = document.getElementById('urls-list');
+  const viewDetailsBtn = document.getElementById('view-details-btn');
+  const exitBtn = document.getElementById('exit-btn');
 
   // Connect to background script
   port = chrome.runtime.connect({ name: 'popup' });
@@ -18,53 +25,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateStatus(detectedUrls) {
     if (detectedUrls.length > 0) {
-      statusElement.innerHTML = `
-        <p class="warning">⚠️ Detected ${detectedUrls.length} suspicious URL${detectedUrls.length > 1 ? 's' : ''}:</p>
-        <ul style="text-align: left; max-height: 100px; overflow-y: auto;">
-          ${detectedUrls.map(url => `<li style="word-break: break-all;">${url}</li>`).join('')}
-        </ul>
-      `;
+      normalState.classList.add('hidden');
+      alertContainer.classList.remove('hidden');
+      
+      // Update alert message with current count
+      const alertMessage = `${detectedUrls.length} Phishing URL${detectedUrls.length > 1 ? 's' : ''} Detected!`;
+      document.getElementById('alert-message').textContent = alertMessage;
+      
+      // Update URLs list in real-time
+      urlsList.innerHTML = Array.from(detectedUrls)
+        .map(url => `<div class="url-item">${url}</div>`)
+        .join('');
+
+      // Update notification to show current count
+      const notificationId = 'phishing-detector';
+      chrome.notifications.clear(notificationId, () => {
+        chrome.notifications.create(notificationId, {
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: 'Phishing URLs Detected!',
+          message: `Total of ${detectedUrls.length} suspicious URL${detectedUrls.length > 1 ? 's' : ''} found.`,
+          priority: 2,
+          requireInteraction: true // Keep notification visible
+        });
+      });
     } else {
-      statusElement.textContent = 'Actively scanning... No suspicious URLs detected';
+      normalState.classList.remove('hidden');
+      alertContainer.classList.add('hidden');
     }
+
+    // Update the stored URLs set
+    lastDetectedUrls = new Set(detectedUrls);
   }
 
-  // Enhanced exit button functionality
-  exitButton.addEventListener('click', () => {
-    // Add ripple effect
-    const ripple = document.createElement('div');
-    ripple.style.position = 'absolute';
-    ripple.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
-    ripple.style.borderRadius = '50%';
-    ripple.style.width = '100px';
-    ripple.style.height = '100px';
-    ripple.style.transform = 'translate(-50%, -50%)';
-    ripple.style.animation = 'ripple 0.6s linear';
-    
-    exitButton.appendChild(ripple);
-    
-    // Send exit message and close after animation
-    setTimeout(() => {
-      port.postMessage({ action: 'exitExtension' });
-      chrome.tabs.query({ active: true, currentWindow: true }, () => {
-        window.close();
-      });
-    }, 200);
+  // Toggle URL list visibility with current content
+  viewDetailsBtn.addEventListener('click', () => {
+    urlsList.classList.toggle('visible');
+    viewDetailsBtn.textContent = urlsList.classList.contains('visible') ? 'Hide Details' : 'View Details';
   });
 
-  // Request initial status
-  port.postMessage({ action: 'getStatus' });
-});
+  exitBtn.addEventListener('click', () => {
+    window.close();
+  });
 
-// Add to background.js (add this to your existing background.js)
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'exitExtension') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'cleanup' });
-        chrome.runtime.reload();
-      }
-    });
-    return true;
-  }
+  // Initial status request
+  port.postMessage({ action: 'getStatus' });
+
+  port.onDisconnect.addListener(() => {
+    console.log('Port disconnected');
+    port = null;
+  });
 });
