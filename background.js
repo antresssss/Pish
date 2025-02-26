@@ -1,25 +1,76 @@
 // background.js
 //MAIN CODE 
 
+
+
+
 // console.log("Background script is running!");
 
 // let detectedUrls = new Set();
 // let ports = new Set();
-
-// const VIRUSTOTAL_API_KEY = 'your key'; // Your VirusTotal API key
+// const VIRUSTOTAL_API_KEY = ''; 
 // const VIRUSTOTAL_API_URL = 'https://www.virustotal.com/api/v3/urls';
-// const GROQ_API_KEY = "your key"; // Your GROQ API key
+// const GROQ_API_KEY = "";
+
+// // Supabase configuration
+// const supabaseUrl = 'https://gcohsrptxssxhpafwvvj.supabase.co';
+// const supabaseKey = '';
+
+// // Function to add URL to Supabase database
+// async function addUrlToDatabase(url) {
+//     try {
+//         const response = await fetch(`${supabaseUrl}/rest/v1/SuspiciousURL`, {
+//             method: 'POST',
+//             headers: {
+//                 'apikey': supabaseKey,
+//                 'Authorization': `Bearer ${supabaseKey}`,
+//                 'Content-Type': 'application/json',
+//                 'Prefer': 'return=representation'
+//             },
+//             body: JSON.stringify({ url: url })
+//         });
+
+//         if (!response.ok) {
+//             throw new Error(`HTTP error! status: ${response.status}`);
+//         }
+
+//         const data = await response.json();
+//         console.log('URL added to database:', data);
+//         return true;
+//     } catch (error) {
+//         console.error('Error adding URL to database:', error);
+//         return false;
+//     }
+// }
+
+// // Add this new function to check URL in database
+// async function checkUrlInDatabase(url) {
+//     try {
+//         const response = await fetch(`${supabaseUrl}/rest/v1/SuspiciousURL?url=eq.${encodeURIComponent(url)}`, {
+//             method: 'GET',
+//             headers: {
+//                 'apikey': supabaseKey,
+//                 'Authorization': `Bearer ${supabaseKey}`
+//             }
+//         });
+
+//         if (!response.ok) {
+//             throw new Error(`HTTP error! status: ${response.status}`);
+//         }
+
+//         const data = await response.json();
+//         return data.length > 0; // Returns true if URL exists in database
+//     } catch (error) {
+//         console.error('Error checking URL in database:', error);
+//         return false;
+//     }
+// }
 
 // // Modified broadcast status function to ensure popup gets updates
 // function broadcastStatus() {
 //     const urlsArray = Array.from(detectedUrls);
-//     // Try to update popup if it's open
-//     chrome.runtime.sendMessage({
-//         type: 'scanningStatus',
-//         detectedUrls: urlsArray
-//     });
     
-//     // Also send through port connections
+//     // Update all connected ports
 //     for (const port of ports) {
 //         try {
 //             port.postMessage({
@@ -30,6 +81,20 @@
 //             console.error('Error broadcasting status:', error);
 //             ports.delete(port);
 //         }
+//     }
+
+//     // Update notification if needed
+//     if (urlsArray.length > 0) {
+//         chrome.notifications.create('phishing-detector', {
+//             type: 'basic',
+//             iconUrl: 'icon.png',
+//             title: 'Phishing URLs Detected!',
+//             message: `Total of ${urlsArray.length} suspicious URL${urlsArray.length > 1 ? 's' : ''} found.`,
+//             priority: 2,
+//             requireInteraction: true
+//         });
+//     } else {
+//         chrome.notifications.clear('phishing-detector');
 //     }
 // }
 
@@ -65,7 +130,6 @@
 //             retryCount++;
 //             console.error(`Attempt ${retryCount} failed:`, error);
 //             if (retryCount === maxRetries) throw error;
-//             // Exponential backoff
 //             await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
 //         }
 //     }
@@ -195,7 +259,6 @@
 // // Check URL with VirusTotal API with rate limiting
 // async function checkWithVirusTotal(url) {
 //     try {
-//         // Add delay for rate limiting
 //         await new Promise(resolve => setTimeout(resolve, 15000));
         
 //         const encodedUrl = encodeURIComponent(url);
@@ -246,7 +309,6 @@
 //     if (port.name === 'popup') {
 //         ports.add(port);
         
-//         // Send initial status
 //         port.postMessage({
 //             type: 'scanningStatus',
 //             detectedUrls: Array.from(detectedUrls)
@@ -292,73 +354,127 @@
 //         });
 //         return true;
 //     }
+
+//     if (request.action === 'unflagUrl') {
+//         handleUnflagUrl(request.url).then(success => {
+//             sendResponse({ success });
+//         });
+//         return true; // Required for async response
+//     }
+//     // ... your existing message handlers ...
 // });
 
-// // Modified checkUrls function to update more frequently
+// // Modified checkUrls function to include database integration
 // async function checkUrls(urls, tabId) {
 //     let updatedUrls = false;
     
 //     for (const url of urls) {
-//         // Skip if URL is already detected as suspicious
 //         if (detectedUrls.has(url)) continue;
 
-//         // Extract features and perform initial checks
-//         const urlFeatures = extractUrlFeatures(url);
-        
-//         // Quick check for obvious phishing indicators
-//         if (urlFeatures.hasIPAddress || urlFeatures.numSpecialChars > 3) {
+//         // First check if URL exists in database
+//         const existsInDatabase = await checkUrlInDatabase(url);
+//         if (existsInDatabase) {
+//             console.log('URL found in database, skipping API checks:', url);
 //             detectedUrls.add(url);
 //             highlightUrl(url, tabId);
 //             updatedUrls = true;
 //             continue;
 //         }
 
-//         // Check with Groq LLM first
+//         // If not in database, proceed with other checks
+//         const urlFeatures = extractUrlFeatures(url);
+        
+//         if (urlFeatures.hasIPAddress || urlFeatures.numSpecialChars > 3) {
+//             detectedUrls.add(url);
+//             await addUrlToDatabase(url); // Add to database
+//             highlightUrl(url, tabId);
+//             updatedUrls = true;
+//             continue;
+//         }
+
 //         const isLLMPhishing = await checkWithLLM(url);
 //         if (isLLMPhishing) {
 //             detectedUrls.add(url);
+//             await addUrlToDatabase(url); // Add to database
 //             highlightUrl(url, tabId);
 //             updatedUrls = true;
 //             continue;
 //         }
 
-//         // If not flagged by Groq LLM, check with VirusTotal
 //         const isVirusTotalPhishing = await checkWithVirusTotal(url);
 //         if (isVirusTotalPhishing) {
 //             detectedUrls.add(url);
+//             await addUrlToDatabase(url); // Add to database
 //             highlightUrl(url, tabId);
 //             updatedUrls = true;
 //         }
-        
-//         // Broadcast status after each detection
-//         if (updatedUrls) {
-//             broadcastStatus();
-//         }
+//     }
+    
+//     if (updatedUrls) {
+//         broadcastStatus();
 //     }
 // }
 
-// // Modified highlightUrl function to ensure popup updates
+// // Store the current notification ID
+// let currentNotificationId = 'phishing-alert';
+
+// // Modified highlightUrl function
 // function highlightUrl(url, tabId) {
 //     chrome.tabs.sendMessage(tabId, {
 //         action: 'highlightPhishingUrl',
 //         url: url
 //     });
-    
-//     // Try to open popup if not already open
-//     chrome.action.openPopup();
 
-//     // Broadcast updated status immediately
+//     chrome.action.openPopup();
 //     broadcastStatus();
 // }
 
 // // Handle extension install/update
 // chrome.runtime.onInstalled.addListener(() => {
-//     // Initialize extension state
 //     detectedUrls.clear();
 // });
 
+// // Add this new function to handle unflagging
+// async function handleUnflagUrl(url) {
+//     try {
+//         // Remove from Supabase database
+//         const response = await fetch(`${supabaseUrl}/rest/v1/SuspiciousURL?url=eq.${encodeURIComponent(url)}`, {
+//             method: 'DELETE',
+//             headers: {
+//                 'apikey': supabaseKey,
+//                 'Authorization': `Bearer ${supabaseKey}`
+//             }
+//         });
 
+//         if (!response.ok) {
+//             throw new Error(`Failed to delete URL from database: ${response.status}`);
+//         }
 
+//         // Remove from local Set
+//         detectedUrls.delete(url);
+
+//         // Remove highlighting from all tabs
+//         const tabs = await chrome.tabs.query({});
+//         for (const tab of tabs) {
+//             try {
+//                 await chrome.tabs.sendMessage(tab.id, {
+//                     action: 'removeHighlight',
+//                     url: url
+//                 });
+//             } catch (error) {
+//                 console.log(`Could not send message to tab ${tab.id}`);
+//             }
+//         }
+
+//         // Broadcast updated status
+//         broadcastStatus();
+//         return true;
+
+//     } catch (error) {
+//         console.error('Error unflagging URL:', error);
+//         return false;
+//     }
+// }
 
 
 
@@ -370,13 +486,17 @@ console.log("Background script is running!");
 
 let detectedUrls = new Set();
 let ports = new Set();
-const VIRUSTOTAL_API_KEY = 'your key'; 
+const VIRUSTOTAL_API_KEY = 'Your own key'; // Replace with your own key
 const VIRUSTOTAL_API_URL = 'https://www.virustotal.com/api/v3/urls';
-const GROQ_API_KEY = "your key";
+const GROQ_API_KEY = "your key";// Replace with your own key
+
+
+// Store URL data including IP information
+let urlDataMap = new Map();
 
 // Supabase configuration
 const supabaseUrl = 'https://gcohsrptxssxhpafwvvj.supabase.co';
-const supabaseKey = 'your key'; 
+const supabaseKey = 'your own key'; // Replace with your own key
 
 // Function to add URL to Supabase database
 async function addUrlToDatabase(url) {
@@ -405,6 +525,157 @@ async function addUrlToDatabase(url) {
     }
 }
 
+// Add this new function to check URL in database
+async function checkUrlInDatabase(url) {
+    try {
+        const response = await fetch(`${supabaseUrl}/rest/v1/SuspiciousURL?url=eq.${encodeURIComponent(url)}`, {
+            method: 'GET',
+            headers: {
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.length > 0; // Returns true if URL exists in database
+    } catch (error) {
+        console.error('Error checking URL in database:', error);
+        return false;
+    }
+}
+
+// New function to resolve hostname to IP using Google DNS API
+async function resolveHostnameToIp(hostname) {
+    try {
+        console.log("Resolving hostname to IP:", hostname);
+        
+        // If hostname is already an IP, return it directly
+        if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname)) {
+            return hostname;
+        }
+
+        // Use Google's DNS-over-HTTPS API to resolve hostname to IP
+        const dnsResponse = await fetch(`https://dns.google/resolve?name=${hostname}`);
+        
+        if (!dnsResponse.ok) {
+            throw new Error(`DNS resolution error: ${dnsResponse.status}`);
+        }
+        
+        const dnsData = await dnsResponse.json();
+        
+        if (dnsData.Answer && dnsData.Answer.length > 0) {
+            // Find the A record (type 1)
+            for (const record of dnsData.Answer) {
+                if (record.type === 1) { // Type 1 is A record (IPv4)
+                    return record.data;
+                }
+            }
+        }
+        
+        throw new Error('No IP address found for hostname');
+    } catch (error) {
+        console.error('Error resolving hostname to IP:', error);
+        return null;
+    }
+}
+
+// New function to get host information from Internet DB API
+async function getInternetDbInfo(ip) {
+    if (!ip) return null;
+    
+    try {
+        console.log("Querying Internet DB for IP:", ip);
+        const response = await fetch(`https://internetdb.shodan.io/${ip}`);
+        
+        if (!response.ok) {
+            throw new Error(`Internet DB query error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        return {
+            ip: ip,
+            ports: data.ports || [],
+            hostnames: data.hostnames || [],
+            cpes: data.cpes || [],
+            tags: data.tags || [],
+            vulnerabilities: data.vulns || [],
+            // Additional fields that we can infer
+            country: 'Not available in Internet DB',
+            isp: 'Not available in Internet DB',
+            lastUpdate: new Date().toISOString()
+        };
+    } catch (error) {
+        console.error('Error getting info from Internet DB:', error);
+        return {
+            ip: ip,
+            ports: [],
+            hostnames: [],
+            country: 'Unknown',
+            isp: 'Unknown',
+            lastUpdate: 'Unknown',
+            tags: [],
+            vulnerabilities: []
+        };
+    }
+}
+
+// Modified function to gather IP information for a URL using Internet DB
+async function gatherIpInfo(url) {
+    try {
+        // Parse URL and extract hostname
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname;
+        console.log("Checking hostname:", hostname);
+
+        // First try to resolve hostname to IP
+        const ip = await resolveHostnameToIp(hostname);
+        console.log("IP from DNS resolve:", ip);
+
+        if (!ip) {
+            // If DNS resolve fails
+            return {
+                url: url,
+                hostname: hostname,
+                ip: 'Not found',
+                ports: [],
+                country: 'Unknown',
+                isp: 'Unknown',
+                tags: [],
+                hostnames: [hostname],
+                vulnerabilities: []
+            };
+        }
+
+        // Get host information from Internet DB
+        const hostInfo = await getInternetDbInfo(ip);
+        console.log("Host info from Internet DB:", hostInfo);
+
+        return {
+            url: url,
+            hostname: hostname,
+            ...hostInfo
+        };
+    } catch (error) {
+        console.error('Error gathering IP info:', error);
+        return {
+            url: url,
+            hostname: 'Error parsing URL',
+            ip: 'Error',
+            ports: [],
+            country: 'Unknown',
+            isp: 'Unknown',
+            tags: [],
+            hostnames: [],
+            vulnerabilities: []
+        };
+    }
+}
+
 // Modified broadcast status function to ensure popup gets updates
 function broadcastStatus() {
     const urlsArray = Array.from(detectedUrls);
@@ -414,7 +685,8 @@ function broadcastStatus() {
         try {
             port.postMessage({
                 type: 'scanningStatus',
-                detectedUrls: urlsArray
+                detectedUrls: urlsArray,
+                urlDataMap: Object.fromEntries(urlDataMap)
             });
         } catch (error) {
             console.error('Error broadcasting status:', error);
@@ -650,16 +922,52 @@ chrome.runtime.onConnect.addListener((port) => {
         
         port.postMessage({
             type: 'scanningStatus',
-            detectedUrls: Array.from(detectedUrls)
+            detectedUrls: Array.from(detectedUrls),
+            urlDataMap: Object.fromEntries(urlDataMap)
         });
 
         port.onMessage.addListener(async (msg) => {
             if (msg.action === 'getStatus') {
                 port.postMessage({
                     type: 'scanningStatus',
-                    detectedUrls: Array.from(detectedUrls)
+                    detectedUrls: Array.from(detectedUrls),
+                    urlDataMap: Object.fromEntries(urlDataMap)
                 });
             }
+            
+            if (msg.action === 'getIpData') {
+                const url = msg.url;
+                
+                // Check if we already have data
+                if (urlDataMap.has(url) && urlDataMap.get(url).ipInfo) {
+                    port.postMessage({
+                        type: 'ipData',
+                        url: url,
+                        data: urlDataMap.get(url).ipInfo
+                    });
+                } else {
+                    // Fetch IP data
+                    console.log("Fetching IP data for:", url);
+                    const ipInfo = await gatherIpInfo(url);
+                    
+                    // Update the URL data map
+                    if (!urlDataMap.has(url)) {
+                        urlDataMap.set(url, {});
+                    }
+                    urlDataMap.get(url).ipInfo = ipInfo;
+                    
+                    // Send back to popup
+                    port.postMessage({
+                        type: 'ipData',
+                        url: url,
+                        data: ipInfo
+                    });
+                    
+                    // Broadcast updated status to all connected ports
+                    broadcastStatus();
+                }
+            }
+            
             broadcastStatus();
         });
 
@@ -689,7 +997,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getStatus') {
         sendResponse({
             type: 'scanningStatus',
-            detectedUrls: Array.from(detectedUrls)
+            detectedUrls: Array.from(detectedUrls),
+            urlDataMap: Object.fromEntries(urlDataMap)
         });
         return true;
     }
@@ -700,7 +1009,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true; // Required for async response
     }
-    // ... your existing message handlers ...
+    
+    if (request.action === 'getIpData') {
+        const url = request.url;
+        gatherIpInfo(url).then(data => {
+            if (!urlDataMap.has(url)) {
+                urlDataMap.set(url, {});
+            }
+            urlDataMap.get(url).ipInfo = data;
+            sendResponse({ success: true, data: data });
+            broadcastStatus();
+        });
+        return true; // Required for async response
+    }
+    
+    if (request.action === 'scanCurrentPage') {
+        if (sender && sender.tab) {
+            chrome.tabs.sendMessage(sender.tab.id, { action: 'scanPage' }, () => {
+                sendResponse({ message: 'Scanning initiated' });
+            });
+        } else {
+            sendResponse({ message: 'Tab information not available' });
+        }
+        return true;
+    }
 });
 
 // Modified checkUrls function to include database integration
@@ -710,11 +1042,34 @@ async function checkUrls(urls, tabId) {
     for (const url of urls) {
         if (detectedUrls.has(url)) continue;
 
+        // First check if URL exists in database
+        const existsInDatabase = await checkUrlInDatabase(url);
+        if (existsInDatabase) {
+            console.log('URL found in database, skipping API checks:', url);
+            detectedUrls.add(url);
+            
+            // Initialize URL data in map if needed
+            if (!urlDataMap.has(url)) {
+                urlDataMap.set(url, {});
+            }
+            
+            highlightUrl(url, tabId);
+            updatedUrls = true;
+            continue;
+        }
+
+        // If not in database, proceed with other checks
         const urlFeatures = extractUrlFeatures(url);
         
         if (urlFeatures.hasIPAddress || urlFeatures.numSpecialChars > 3) {
             detectedUrls.add(url);
             await addUrlToDatabase(url); // Add to database
+            
+            // Initialize URL data in map if needed
+            if (!urlDataMap.has(url)) {
+                urlDataMap.set(url, {});
+            }
+            
             highlightUrl(url, tabId);
             updatedUrls = true;
             continue;
@@ -724,6 +1079,12 @@ async function checkUrls(urls, tabId) {
         if (isLLMPhishing) {
             detectedUrls.add(url);
             await addUrlToDatabase(url); // Add to database
+            
+            // Initialize URL data in map if needed
+            if (!urlDataMap.has(url)) {
+                urlDataMap.set(url, {});
+            }
+            
             highlightUrl(url, tabId);
             updatedUrls = true;
             continue;
@@ -733,13 +1094,19 @@ async function checkUrls(urls, tabId) {
         if (isVirusTotalPhishing) {
             detectedUrls.add(url);
             await addUrlToDatabase(url); // Add to database
+            
+            // Initialize URL data in map if needed
+            if (!urlDataMap.has(url)) {
+                urlDataMap.set(url, {});
+            }
+            
             highlightUrl(url, tabId);
             updatedUrls = true;
         }
-        
-        if (updatedUrls) {
-            broadcastStatus();
-        }
+    }
+    
+    if (updatedUrls) {
+        broadcastStatus();
     }
 }
 
@@ -760,6 +1127,7 @@ function highlightUrl(url, tabId) {
 // Handle extension install/update
 chrome.runtime.onInstalled.addListener(() => {
     detectedUrls.clear();
+    urlDataMap.clear();
 });
 
 // Add this new function to handle unflagging
@@ -778,8 +1146,9 @@ async function handleUnflagUrl(url) {
             throw new Error(`Failed to delete URL from database: ${response.status}`);
         }
 
-        // Remove from local Set
+        // Remove from local Set and Map
         detectedUrls.delete(url);
+        urlDataMap.delete(url);
 
         // Remove highlighting from all tabs
         const tabs = await chrome.tabs.query({});
@@ -803,3 +1172,4 @@ async function handleUnflagUrl(url) {
         return false;
     }
 }
+
